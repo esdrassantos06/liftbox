@@ -305,7 +305,7 @@ describe("flip", () => {
     await user.click(screen.getByRole("button", { name: "Flip horizontally" }));
     expect(currentImage().style.transform).toBe("scale(-1, 1)");
     await user.click(screen.getByRole("button", { name: "Flip vertically" }));
-    expect(currentImage().style.transform).toBe("scale(-1, -1)");
+    expect(currentImage().style.transform).toMatch(/^scale\(-1(, -1)?\)$/);
     await user.click(screen.getByRole("button", { name: "Flip horizontally" }));
     await user.click(screen.getByRole("button", { name: "Flip vertically" }));
     expect(currentImage().style.transform).toBe("");
