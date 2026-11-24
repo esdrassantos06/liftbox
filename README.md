@@ -38,6 +38,14 @@ Using liftbox? A star on GitHub is how the next person searching for a React lig
 - Server-rendering safe, ready for the Next.js App Router.
 - Styled with `--eg-*` CSS variables. The lightbox needs no `'unsafe-inline'` in a Content Security Policy.
 
+### Cropped thumbnails
+
+A thumbnail cropped with `object-fit: cover` and an `object-position` such as `top` opens from the part of the photo it was showing, so the first frame of the open and the last frame of the close match the grid. Below, the same portrait thumbnail with `object-position: top`, slowed down to 1.4 seconds.
+
+<p align="center">
+  <img src="./assets/cropped-thumbnail.gif" alt="Side by side, a square thumbnail of a tall photo cropped to its top opens into the lightbox. On the left, version 1.3.3 jumps to a centered crop on the first frame and cuts off the sun. On the right, version 1.3.4 starts from the same crop the thumbnail shows and grows smoothly." width="720" />
+</p>
+
 ## Compared with other React lightboxes
 
 |                            | liftbox                     | yet-another-react-lightbox | PhotoSwipe | lightGallery               |
