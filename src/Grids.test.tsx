@@ -235,3 +235,12 @@ describe("UniformGrid layout", () => {
     expect(img).toHaveAttribute("height", "183");
   });
 });
+
+describe("filtering", () => {
+  it("keeps each slide's own image element when slides before it are filtered out", () => {
+    const { rerender } = render(<UniformGrid slides={slides} />);
+    const bravo = screen.getByRole("img", { name: "Bravo" });
+    rerender(<UniformGrid slides={slides.slice(1)} />);
+    expect(screen.getByRole("img", { name: "Bravo" })).toBe(bravo);
+  });
+});
