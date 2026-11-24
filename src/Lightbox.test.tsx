@@ -278,6 +278,18 @@ describe("Lightbox", () => {
     await user.keyboard("{Escape}");
     await waitFor(() => expect(onAfterClose).toHaveBeenCalledTimes(1));
   });
+
+  it("finishes closing when the slides run out, and stays closed when they come back", async () => {
+    const onAfterClose = vi.fn();
+    const props = { onClose: () => {}, onAfterClose };
+    const { rerender } = render(<Lightbox slides={slides} open {...props} />);
+    await screen.findByRole("dialog");
+    rerender(<Lightbox slides={[]} open {...props} />);
+    rerender(<Lightbox slides={[]} open={false} {...props} />);
+    await waitFor(() => expect(onAfterClose).toHaveBeenCalledTimes(1));
+    rerender(<Lightbox slides={slides} open={false} {...props} />);
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
 });
 
 interface FakeAnimation {
