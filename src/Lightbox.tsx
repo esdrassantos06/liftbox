@@ -96,6 +96,9 @@ const DEFAULT_IDLE_MS = 3000;
 
 const COPIED_MS = 2000;
 
+/** How long a downloaded blob URL stays alive; some browsers read it well after the click. */
+const BLOB_TTL_MS = 40_000;
+
 /** Slides whose load status and natural size are kept, most recently seen first. */
 const MEMORY_LIMIT = 300;
 
@@ -1220,7 +1223,7 @@ export function Lightbox({
       if (!response.ok) throw new Error(`Download failed with HTTP ${response.status}`);
       const href = URL.createObjectURL(await response.blob());
       saveLink(href, name);
-      window.setTimeout(() => URL.revokeObjectURL(href), 100);
+      window.setTimeout(() => URL.revokeObjectURL(href), BLOB_TTL_MS);
     } catch (error) {
       window.open(url, "_blank", "noopener");
       setNotice(labels.downloadError);
