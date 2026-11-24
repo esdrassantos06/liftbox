@@ -5,6 +5,13 @@ description: Notable changes in each release.
 
 The project follows [Semantic Versioning](https://semver.org). The source of this page is [`CHANGELOG.md`](https://github.com/esdrassantos06/liftbox/blob/main/CHANGELOG.md).
 
+## 1.3.5 (2026-11-24)
+
+- A pinch that closed the lightbox while one finger stayed on the screen left that finger behind. On the next open, a one-finger swipe counted as a pinch and closed the lightbox again. Gesture state now resets on close.
+- Emptying `slides` and then closing the lightbox left it stuck mid-close: `onAfterClose` never fired, and once slides came back the dialog reappeared to replay the close animation. It now finishes closing right away.
+- Grid items are keyed by the slide's `src` instead of its position, so filtering no longer shows a photo's old picture in another item while the new one loads.
+- Cross-origin downloads keep their blob URL for 40 seconds instead of 100 ms, which could cut the download short in browsers that read the file late.
+
 ## 1.3.4 (2026-11-05)
 
 - The open and close flight now starts from the thumbnail's `object-position` crop. Before, it always started from a centered crop, so a thumbnail showing the top or one side of the photo (`object-position: top` on portrait headshots, for example) jumped on the first frame. The position only counts when `object-fit: cover` actually crops the thumbnail. A thumbnail file already cut to its box keeps the centered start.
@@ -23,7 +30,6 @@ The project follows [Semantic Versioning](https://semver.org). The source of thi
 
 ## 1.3.0 (2026-11-04)
 
-- Renamed from `@esdrassantos06/gallery` to `liftbox`, with docs at [liftbox.digital](https://liftbox.digital). Install `liftbox` and change the imports to `liftbox` and `liftbox/styles.css`. The API, class names and `--eg-*` variables are unchanged.
 - Image slides take `sources` for a `<picture>`: AVIF or WebP versions by `type` and other crops by `media`, with `src` and `srcSet` as the fallback. Sources wait their turn like the image. New `ImageSource` type.
 - `useLightboxHash` takes `names`, one per slide, to put `#prefix-harbour` in the URL instead of `#prefix-3`. Numbered links keep opening.
 - Docs: a comparison with other React lightboxes and a migration guide from lightGallery.

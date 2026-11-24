@@ -158,10 +158,6 @@ Minified and gzipped by [bundlejs](https://bundlejs.com) from the version on npm
 
 The public site, with the docs and demos, lives in [`docs/`](./docs) (Next.js and Fumadocs) and has its own scripts: `npm run dev --prefix docs` and `npm run build --prefix docs`. It runs as a Next.js server on Vercel, with `docs` as the project's root directory. [`docs/proxy.ts`](./docs/proxy.ts) gives every page a fresh nonce and a Content Security Policy with `default-src 'self'` that trusts only scripts and style tags carrying that nonce.
 
-## Migrating from @esdrassantos06/gallery
-
-This package was published as `@esdrassantos06/gallery` until 1.2.0. Moving over takes one install and two import paths: the API, class names and `--eg-*` variables did not change.
-
 ## Contributing
 
 Contributions are welcome. Read [CONTRIBUTING.md](./CONTRIBUTING.md) and the [Code of Conduct](./CODE_OF_CONDUCT.md), and report vulnerabilities as described in [SECURITY.md](./SECURITY.md). Changes are listed in [CHANGELOG.md](./CHANGELOG.md).
