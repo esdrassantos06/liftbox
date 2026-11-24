@@ -16,8 +16,7 @@ export default function NotFound() {
         <p className="text-fd-muted-foreground text-sm font-medium">404</p>
         <h1 className="mt-2 text-4xl font-semibold tracking-[-0.03em]">Page not found</h1>
         <p className="text-fd-muted-foreground mt-4">
-          Nothing lives at this address. The page may have moved when the package was renamed to
-          liftbox, so try one of these or press Ctrl K to search the docs.
+          Nothing lives at this address. Try one of these pages, or press Ctrl K to search the docs.
         </p>
         <ul className="mt-8 grid gap-2">
           {links.map(([href, text]) => (
