@@ -292,6 +292,25 @@ describe("pinch to close", () => {
     pinch(240);
     expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
+
+  it("forgets a finger still down at close, so the next open swipes with one finger", async () => {
+    const { user } = await openAt(2);
+    act(() => {
+      touch("pointerDown", 1, 200);
+      touch("pointerDown", 2, 400);
+      touch("pointerMove", 2, 240);
+      touch("pointerUp", 1, 200);
+    });
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await user.click(screen.getByRole("button", { name: "open 3" }));
+    await screen.findByRole("dialog");
+    act(() => {
+      touch("pointerDown", 1, 400);
+      touch("pointerMove", 1, 250);
+      touch("pointerUp", 1, 250);
+    });
+    expect(counter()).toBe("4 / 12");
+  });
 });
 
 describe("flip", () => {

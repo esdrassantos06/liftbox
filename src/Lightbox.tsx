@@ -583,6 +583,10 @@ export function Lightbox({
   }, [getThumbnail, active, onAfterClose]);
 
   useIsoLayoutEffect(() => {
+    if (phase === "closing" && total === 0) {
+      finishClose();
+      return;
+    }
     const root = rootRef.current;
     if (!shown || !root || !measured || (phase !== "opening" && phase !== "closing")) return;
     const finish = phase === "opening" ? finishOpen : finishClose;
@@ -650,6 +654,19 @@ export function Lightbox({
   };
 
   useEffect(() => () => cancelAnimationFrame(frameRef.current), []);
+
+  useEffect(() => {
+    if (!shown) return;
+    const pointers = pointersRef.current;
+    return () => {
+      // A finger still down when the stage unmounts never sends its pointerup.
+      pointers.clear();
+      modeRef.current = null;
+      dragRef.current = null;
+      tapRef.current = null;
+      lastTapRef.current = null;
+    };
+  }, [shown]);
 
   const capture = (ids: Iterable<number>) => {
     for (const id of ids) {
