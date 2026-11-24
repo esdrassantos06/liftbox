@@ -152,6 +152,7 @@ describe("download", () => {
   it("fetches cross-origin files as a blob so the name is kept", async () => {
     const slides: Slide[] = [{ src: "https://cdn.example.com/photos/sea.jpg", alt: "Sea" }];
     const { user } = await openAt(0, { slides, download: true });
+    const timeouts = vi.spyOn(window, "setTimeout");
     await user.click(screen.getByRole("button", { name: "Download" }));
     await waitFor(() => expect(clicks).toHaveLength(1));
     expect(fetchMock).toHaveBeenCalledWith("https://cdn.example.com/photos/sea.jpg", {
@@ -159,7 +160,11 @@ describe("download", () => {
     });
     expect(clicks[0]!.getAttribute("href")).toBe("blob:fake");
     expect(clicks[0]!.download).toBe("sea.jpg");
-    await waitFor(() => expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:fake"));
+    expect(URL.revokeObjectURL).not.toHaveBeenCalled();
+    const revoke = timeouts.mock.calls.find(([, delay]) => delay === 40_000)?.[0];
+    expect(revoke).toBeTypeOf("function");
+    (revoke as () => void)();
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:fake");
   });
 
   it("opens the file in a new tab, announces it and reports the error when the server refuses", async () => {

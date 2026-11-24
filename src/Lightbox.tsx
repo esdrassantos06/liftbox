@@ -1,12 +1,9 @@
 import {
-  useCallback,
   useEffect,
-  useId,
   useRef,
   useState,
   useSyncExternalStore,
   type CSSProperties,
-  type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent,
   type PointerEvent,
   type ReactElement,
@@ -20,8 +17,10 @@ import {
   lockScroll,
   readDuration,
   readEasing,
+  subscribeNothing,
   useDataBudget,
   useIsoLayoutEffect,
+  useLatest,
 } from "./dom";
 import {
   fitContain,
@@ -52,7 +51,7 @@ import { defaultLabels } from "./labels";
 import { remember } from "./lru";
 import { getMedia, hasUnsafeScheme } from "./media";
 import { Thumbnails } from "./Thumbnails";
-import { getToolbarOverflow, TOOLBAR_PRIORITY, type ToolKey } from "./toolbar";
+import { ToolbarButtons, type Tool } from "./ToolbarButtons";
 import type { ImageSource, LightboxClassNames, LightboxProps, Slide, VideoSource } from "./types";
 import { useFullscreen } from "./useFullscreen";
 import { resolveZoom, useZoom } from "./useZoom";
@@ -97,6 +96,9 @@ const DEFAULT_IDLE_MS = 3000;
 
 const COPIED_MS = 2000;
 
+/** How long a downloaded blob URL stays alive; some browsers read it well after the click. */
+const BLOB_TTL_MS = 40_000;
+
 /** Slides whose load status and natural size are kept, most recently seen first. */
 const MEMORY_LIMIT = 300;
 
@@ -106,15 +108,10 @@ const PAGER_DOTS = 12;
 /** Parts that idle hiding fades out. */
 const CONTROLS = [".eg-top-bar", ".eg-arrow", ".eg-caption", ".eg-thumbnails", ".eg-pager"];
 
-interface Tool {
-  key: ToolKey;
-  label: string;
-  icon: ReactNode;
-  onClick: (e: MouseEvent<HTMLElement>) => void;
-  disabled?: boolean;
+/** The video of the current slide inside `scope`, if it shows one. */
+function currentVideo(scope: Element | null | undefined): HTMLVideoElement | null {
+  return scope?.querySelector<HTMLVideoElement>(".eg-slide[data-current] video") ?? null;
 }
-
-const subscribeNothing = () => () => {};
 
 function isOnScreen(rect: Rect): boolean {
   return (
@@ -338,13 +335,8 @@ export function Lightbox({
   const stageRef = useRef<HTMLDivElement>(null);
   const topBarRef = useRef<HTMLDivElement>(null);
   const toolbarRef = useRef<HTMLDivElement>(null);
-  const moreRef = useRef<HTMLButtonElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
-  const widthsRef = useRef(new Map<string, number>());
   const wokeRef = useRef(false);
-  const menuId = useId();
-  const [overflow, setOverflow] = useState<readonly string[]>([]);
-  const [menuOpen, setMenuOpen] = useState<false | "first" | "last">(false);
+  const [menuShown, setMenuShown] = useState(false);
   const [idleNow, setIdleNow] = useState(false);
   const [copied, setCopied] = useState(false);
   const [inheritedRtl, setInheritedRtl] = useState(false);
@@ -391,44 +383,34 @@ export function Lightbox({
     advance(target);
   };
 
-  const currentKind = total > 0 ? getMedia(slides[active] as Slide).kind : "image";
+  const shownSlide = slides[active];
+  const currentKind = shownSlide ? getMedia(shownSlide).kind : "image";
   const holding = currentKind !== "image";
 
   const advanceSlideshow = () => {
     if (hasNext) advance(active + 1);
     else setPlaying(false);
   };
-  const advanceRef = useRef(advanceSlideshow);
-  useIsoLayoutEffect(() => {
-    advanceRef.current = advanceSlideshow;
-  });
+  const advanceRef = useLatest(advanceSlideshow);
 
   const interval = slideshowConfig?.interval ?? 0;
   useEffect(() => {
     if (!playing || !shown || phase === "closing" || pageHidden || holding || !interval) return;
     const timer = window.setTimeout(() => advanceRef.current(), interval);
     return () => window.clearTimeout(timer);
-  }, [playing, shown, phase, pageHidden, holding, interval, active]);
+  }, [playing, shown, phase, pageHidden, holding, interval, active, advanceRef]);
 
   const toggleSlideshow = (e: MouseEvent<HTMLElement>) => {
-    if (playing) {
-      e.currentTarget
-        .closest(".eg-root")
-        ?.querySelector<HTMLVideoElement>(".eg-slide[data-current] video")
-        ?.pause();
-    }
+    if (playing) currentVideo(e.currentTarget.closest(".eg-root"))?.pause();
     setPlaying(!playing);
   };
 
-  const mediaHandlerRef = useRef<(e: Event) => void>(() => {});
-  useIsoLayoutEffect(() => {
-    mediaHandlerRef.current = (e: Event) => {
-      const media = e.target;
-      if (!playing || !(media instanceof HTMLMediaElement)) return;
-      if (!media.closest(".eg-slide[data-current]")) return;
-      if (e.type === "ended") advanceRef.current();
-      else if (!media.ended) setPlaying(false);
-    };
+  const mediaHandlerRef = useLatest((e: Event) => {
+    const media = e.target;
+    if (!playing || !(media instanceof HTMLMediaElement)) return;
+    if (!media.closest(".eg-slide[data-current]")) return;
+    if (e.type === "ended") advanceRef.current();
+    else if (!media.ended) setPlaying(false);
   });
 
   useEffect(() => {
@@ -441,11 +423,11 @@ export function Lightbox({
       stage.removeEventListener("ended", listener, true);
       stage.removeEventListener("pause", listener, true);
     };
-  }, [shown]);
+  }, [shown, mediaHandlerRef]);
 
   useEffect(() => {
     if (!shown || !playing || currentKind !== "video") return;
-    const el = stageRef.current?.querySelector<HTMLVideoElement>(".eg-slide[data-current] video");
+    const el = currentVideo(stageRef.current);
     el?.play()?.catch(() => {
       el.muted = true;
       el.play()?.catch(() => {});
@@ -467,8 +449,8 @@ export function Lightbox({
       .forEach((el) => {
         el.pause();
       });
-    const currentVideo = stage.querySelector<HTMLVideoElement>(".eg-slide[data-current] video");
-    if (currentVideo && video?.autoplay) currentVideo.play()?.catch(() => {});
+    const current = currentVideo(stage);
+    if (current && video?.autoplay) current.play()?.catch(() => {});
   }, [shown, active, video?.autoplay]);
 
   useEffect(() => {
@@ -569,20 +551,20 @@ export function Lightbox({
     zoomReset();
   }, [active, box?.width, box?.height, zoomReset]);
 
-  const finishOpen = useCallback(() => {
+  const finishOpen = () => {
     setPhase("open");
     onAfterOpen?.();
-  }, [onAfterOpen]);
+  };
 
-  const finishClose = useCallback(() => {
+  const finishClose = () => {
     const thumbnail = getThumbnail?.(active);
     const target = thumbnail?.isConnected ? thumbnail : openerRef.current;
     if (target?.isConnected) target.focus();
     setPhase("closed");
     onAfterClose?.();
-  }, [getThumbnail, active, onAfterClose]);
+  };
 
-  useIsoLayoutEffect(() => {
+  const animatePhase = useLatest((): (() => void) | undefined => {
     if (phase === "closing" && total === 0) {
       finishClose();
       return;
@@ -629,7 +611,8 @@ export function Lightbox({
       cancelled = true;
       animation.cancel();
     };
-  }, [phase, shown, measured]);
+  });
+  useIsoLayoutEffect(() => animatePhase.current(), [phase, shown, measured, animatePhase]);
 
   const setDragStyle = (x: number, y: number, progress: number) => {
     cancelAnimationFrame(frameRef.current);
@@ -908,28 +891,22 @@ export function Lightbox({
     action();
   };
 
-  const keyHandlerRef = useRef(onKeyDown);
-  useIsoLayoutEffect(() => {
-    keyHandlerRef.current = onKeyDown;
-  });
+  const keyHandlerRef = useLatest(onKeyDown);
   useEffect(() => {
     if (!shown) return;
     const listener = (e: KeyboardEvent) => keyHandlerRef.current(e);
     document.addEventListener("keydown", listener);
     return () => document.removeEventListener("keydown", listener);
-  }, [shown]);
+  }, [shown, keyHandlerRef]);
 
-  const wheelHandlerRef = useRef<(e: WheelEvent) => void>(() => {});
-  useIsoLayoutEffect(() => {
-    wheelHandlerRef.current = (e: WheelEvent) => {
-      if (!zoomConfig?.wheel || !zoom.targetRef.current) return;
-      e.preventDefault();
-      zoom.zoomBy(
-        getWheelFactor(e.deltaY, e.deltaMode, e.ctrlKey),
-        { x: e.clientX, y: e.clientY },
-        false,
-      );
-    };
+  const wheelHandlerRef = useLatest((e: WheelEvent) => {
+    if (!zoomConfig?.wheel || !zoom.targetRef.current) return;
+    e.preventDefault();
+    zoom.zoomBy(
+      getWheelFactor(e.deltaY, e.deltaMode, e.ctrlKey),
+      { x: e.clientX, y: e.clientY },
+      false,
+    );
   });
   useEffect(() => {
     const stage = stageRef.current;
@@ -937,7 +914,7 @@ export function Lightbox({
     const listener = (e: WheelEvent) => wheelHandlerRef.current(e);
     stage.addEventListener("wheel", listener, { passive: false });
     return () => stage.removeEventListener("wheel", listener);
-  }, [shown]);
+  }, [shown, wheelHandlerRef]);
 
   useIsoLayoutEffect(() => {
     const root = rootRef.current;
@@ -957,52 +934,8 @@ export function Lightbox({
     onClose();
   };
 
-  useIsoLayoutEffect(() => {
-    const bar = topBarRef.current;
-    const toolbar = toolbarRef.current;
-    if (!bar || !toolbar) return;
-    const items = [...toolbar.querySelectorAll<HTMLElement>("[data-eg-tool]")];
-    const keys = items.map((el) => el.dataset.egTool as ToolKey);
-    let next: string[] = [];
-    if (toolbarOverflow) {
-      const widths = widthsRef.current;
-      const gap = parseFloat(window.getComputedStyle(toolbar).columnGap) || 0;
-      let visible = 0;
-      for (const el of items) {
-        if (el.hidden) continue;
-        const width = el.offsetWidth + gap;
-        widths.set(el.dataset.egTool as string, width);
-        visible += width;
-      }
-      const more = toolbar.querySelector<HTMLElement>(".eg-more");
-      if (more) widths.set("more", more.offsetWidth + gap);
-      const moreWidth = widths.get("more") ?? widths.values().next().value ?? 0;
-      const style = window.getComputedStyle(bar);
-      const padding = (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0);
-      const counter = bar.querySelector<HTMLElement>(".eg-counter")?.offsetWidth ?? 0;
-      next = getToolbarOverflow({
-        available: bar.clientWidth - padding,
-        reserved: counter + toolbar.offsetWidth - visible - (more ? moreWidth : 0),
-        moreWidth,
-        items: keys.map((key) => ({
-          width: widths.get(key) ?? 0,
-          priority: TOOLBAR_PRIORITY[key],
-        })),
-      }).map((i) => keys[i] as string);
-    }
-    if (next.join() !== overflow.join()) setOverflow(next);
-    if (!next.length && menuOpen) setMenuOpen(false);
-  });
-
-  useIsoLayoutEffect(() => {
-    if (!menuOpen) return;
-    const items = menuRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]');
-    (menuOpen === "first" ? items?.[0] : items?.[items.length - 1])?.focus();
-  }, [menuOpen]);
-
-  if (!shown) return null;
-
-  const slide = slides[active] as Slide;
+  const slide = slides[active];
+  if (!shown || !slide) return null;
   const button = (part: "button" | "arrow", base: string) =>
     cx(cn("button", "eg-button"), part === "arrow" && cn("arrow", base));
 
@@ -1250,12 +1183,22 @@ export function Lightbox({
 
   const currentMedia = renderMedia(slide, active, true, false);
   const hold = budget === "save" || (currentMedia.builtIn && status[slide.src] === undefined);
-  const windowSlides = getSlideWindow(active, total, reach, loop).map(({ index: i, offset }) => ({
-    index: i,
-    offset,
-    isCurrent: i === active,
-    media: i === active ? currentMedia : renderMedia(slides[i] as Slide, i, false, hold),
-  }));
+  const windowSlides = getSlideWindow(active, total, reach, loop).flatMap(
+    ({ index: i, offset }) => {
+      const item = slides[i];
+      if (!item) return [];
+      const isCurrent = i === active;
+      return [
+        {
+          index: i,
+          offset,
+          item,
+          isCurrent,
+          media: isCurrent ? currentMedia : renderMedia(item, i, false, hold),
+        },
+      ];
+    },
+  );
   const currentIsImage = windowSlides.find((s) => s.isCurrent)?.media.builtIn ?? false;
   const showThumbnails = thumbnails && total > 1;
 
@@ -1280,7 +1223,7 @@ export function Lightbox({
       if (!response.ok) throw new Error(`Download failed with HTTP ${response.status}`);
       const href = URL.createObjectURL(await response.blob());
       saveLink(href, name);
-      window.setTimeout(() => URL.revokeObjectURL(href), 100);
+      window.setTimeout(() => URL.revokeObjectURL(href), BLOB_TTL_MS);
     } catch (error) {
       window.open(url, "_blank", "noopener");
       setNotice(labels.downloadError);
@@ -1396,126 +1339,21 @@ export function Lightbox({
       onClick: fs.toggle,
     });
   }
-  const overflowTools = tools.filter((tool) => overflow.includes(tool.key));
-  const menuShown = !!menuOpen && overflowTools.length > 0;
-
-  const closeMenu = () => {
-    setMenuOpen(false);
-    moreRef.current?.focus();
-  };
-
-  const openMenu = (which: "first" | "last") => {
-    const items = menuRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]');
-    if (menuShown && items) (which === "first" ? items[0] : items[items.length - 1])?.focus();
-    else setMenuOpen(which);
-  };
-
-  const onMenuKeyDown = (e: ReactKeyboardEvent<HTMLElement>) => {
-    const items = [...(menuRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])];
-    const at = items.indexOf(document.activeElement as HTMLElement);
-    if (at < 0) {
-      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-        e.preventDefault();
-        openMenu(e.key === "ArrowDown" ? "first" : "last");
-      } else if (e.key === "Escape" && menuShown) {
-        e.preventDefault();
-        setMenuOpen(false);
-      }
-      return;
-    }
-    const moves: Record<string, number> = {
-      ArrowDown: at + 1,
-      ArrowUp: at - 1,
-      Home: 0,
-      End: items.length - 1,
-    };
-    const move = moves[e.key];
-    if (move !== undefined) {
-      e.preventDefault();
-      items[wrapIndex(move, items.length)]?.focus();
-    } else if (e.key === "Escape" || e.key === "Tab") {
-      e.preventDefault();
-      closeMenu();
-    } else if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
-      e.preventDefault();
-    }
-  };
 
   const toolbarButtons = (
-    <>
-      {tools.map((tool) => (
-        <button
-          key={tool.key}
-          type="button"
-          className={button("button", "")}
-          aria-label={tool.label}
-          disabled={tool.disabled}
-          hidden={overflow.includes(tool.key)}
-          data-eg-tool={tool.key}
-          onClick={tool.onClick}
-        >
-          {tool.icon}
-        </button>
-      ))}
-      {overflowTools.length ? (
-        <div className="eg-more">
-          <button
-            ref={moreRef}
-            type="button"
-            className={button("button", "")}
-            aria-label={labels.more}
-            aria-haspopup="menu"
-            aria-expanded={menuShown}
-            aria-controls={menuShown ? menuId : undefined}
-            onClick={() => (menuShown ? setMenuOpen(false) : setMenuOpen("first"))}
-            onKeyDown={onMenuKeyDown}
-          >
-            {icons.more}
-          </button>
-          {menuShown ? (
-            <>
-              <div
-                className="eg-menu-scrim"
-                aria-hidden="true"
-                onPointerDown={(e) => {
-                  e.preventDefault();
-                  closeMenu();
-                }}
-              />
-              <div
-                ref={menuRef}
-                id={menuId}
-                role="menu"
-                aria-label={labels.more}
-                tabIndex={-1}
-                className={cn("menu", "eg-menu")}
-                onKeyDown={onMenuKeyDown}
-              >
-                {overflowTools.map((tool) => (
-                  <button
-                    key={tool.key}
-                    type="button"
-                    role="menuitem"
-                    tabIndex={-1}
-                    className={cn("menuItem", "eg-menu-item")}
-                    aria-disabled={tool.disabled || undefined}
-                    onClick={(e) => {
-                      if (tool.disabled) return;
-                      tool.onClick(e);
-                      closeMenu();
-                    }}
-                  >
-                    {tool.icon}
-                    <span>{tool.label}</span>
-                  </button>
-                ))}
-              </div>
-            </>
-          ) : null}
-        </div>
-      ) : null}
-      {closeButton}
-    </>
+    <ToolbarButtons
+      tools={tools}
+      closeButton={closeButton}
+      overflow={toolbarOverflow}
+      barRef={topBarRef}
+      toolbarRef={toolbarRef}
+      moreLabel={labels.more}
+      moreIcon={icons.more}
+      buttonClassName={button("button", "")}
+      menuClassName={cn("menu", "eg-menu")}
+      menuItemClassName={cn("menuItem", "eg-menu-item")}
+      onMenuChange={setMenuShown}
+    />
   );
 
   const showPager = pager && total > 1;
@@ -1565,7 +1403,7 @@ export function Lightbox({
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerCancel}
       >
-        {windowSlides.map(({ index: i, offset, isCurrent, media }) => (
+        {windowSlides.map(({ index: i, offset, item, isCurrent, media }) => (
           <div
             key={i}
             className={cn("slide", "eg-slide")}
@@ -1577,17 +1415,13 @@ export function Lightbox({
             }
             data-current={isCurrent || undefined}
             data-jump={jumps.has(i) || undefined}
-            data-status={
-              media.builtIn
-                ? (status[(slides[i] as Slide).src] ?? "loading")
-                : status[(slides[i] as Slide).src]
-            }
+            data-status={media.builtIn ? (status[item.src] ?? "loading") : status[item.src]}
             role="presentation"
             aria-hidden={isCurrent ? undefined : true}
             onClick={onSlideClick}
           >
             {media.node}
-            {slideCaption(slides[i] as Slide, i, media.frame)}
+            {slideCaption(item, i, media.frame)}
           </div>
         ))}
       </div>

@@ -1,5 +1,5 @@
 import { useRef, useState, type ReactElement, type ReactNode } from "react";
-import { fetchPriority, useIsoLayoutEffect } from "./dom";
+import { fetchPriority, prefersReducedMotion, useIsoLayoutEffect } from "./dom";
 import { previewOf } from "./media";
 import type { LightboxLabels, Slide } from "./types";
 
@@ -94,7 +94,7 @@ export function Thumbnails({
       if (!(button instanceof HTMLElement)) return;
       center = button.offsetLeft + button.offsetWidth / 2;
     }
-    const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    const reduced = prefersReducedMotion();
     const previous = centeredRef.current;
     const near =
       !virtual ||

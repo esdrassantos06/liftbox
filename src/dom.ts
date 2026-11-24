@@ -1,8 +1,32 @@
-import { useEffect, useLayoutEffect, useSyncExternalStore, version } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useSyncExternalStore,
+  version,
+  type RefObject,
+} from "react";
 
 /** `useLayoutEffect` in the browser, `useEffect` on the server, where layout effects do not run. */
 export const useIsoLayoutEffect: typeof useEffect =
   typeof window === "undefined" ? useEffect : useLayoutEffect;
+
+/** Ref that always holds the latest `value`, for listeners and effects that must not re-run when it changes. */
+export function useLatest<T>(value: T): RefObject<T> {
+  const ref = useRef(value);
+  useIsoLayoutEffect(() => {
+    ref.current = value;
+  });
+  return ref;
+}
+
+/** `useSyncExternalStore` subscriber for values that never change after mount. */
+export const subscribeNothing = (): (() => void) => () => {};
+
+/** Whether the user asked the system to reduce motion. */
+export function prefersReducedMotion(): boolean {
+  return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+}
 
 // React 19 only knows `fetchPriority`; React 18 warns on it and passes `fetchpriority` through.
 const PRIORITY_PROP = Number.parseInt(version, 10) >= 19 ? "fetchPriority" : "fetchpriority";
@@ -97,7 +121,7 @@ const DEFAULT_DURATION = 320;
 
 /** Animation length for `el`: its `--eg-duration`, or zero under reduced motion. */
 export function readDuration(el: Element): number {
-  if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return 0;
+  if (prefersReducedMotion()) return 0;
   return parseDuration(
     window.getComputedStyle(el).getPropertyValue("--eg-duration"),
     DEFAULT_DURATION,

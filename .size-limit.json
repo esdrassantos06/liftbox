@@ -3,22 +3,26 @@
     "name": "Lightbox (JS, min+brotli)",
     "path": "dist/index.js",
     "import": "{ Lightbox }",
-    "ignore": ["react", "react-dom"]
+    "ignore": ["react", "react-dom"],
+    "limit": "14.5 kB"
   },
   {
     "name": "Grids and filter (JS, min+brotli)",
     "path": "dist/index.js",
     "import": "{ MasonryGrid, JustifiedGrid, UniformGrid, GalleryFilter }",
-    "ignore": ["react", "react-dom"]
+    "ignore": ["react", "react-dom"],
+    "limit": "3.25 kB"
   },
   {
     "name": "Everything (JS, min+brotli)",
     "path": "dist/index.js",
-    "ignore": ["react", "react-dom"]
+    "ignore": ["react", "react-dom"],
+    "limit": "17 kB"
   },
   {
     "name": "styles.css (min+brotli)",
     "path": "dist/styles.css",
-    "rolldown": false
+    "rolldown": false,
+    "limit": "3.75 kB"
   }
 ]

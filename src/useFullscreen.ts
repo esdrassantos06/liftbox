@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState, useSyncExternalStore, type RefObject } from "react";
-
-const subscribeNothing = () => () => {};
+import { subscribeNothing } from "./dom";
 
 /** What {@link useFullscreen} returns. */
 export interface FullscreenController {

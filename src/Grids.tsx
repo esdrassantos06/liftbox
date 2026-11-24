@@ -161,6 +161,7 @@ const BaseGrid = /* @__PURE__ */ forwardRef<GridHandle, BaseGridProps>(function 
     [arrange, width, gapPx],
   );
   const { open } = { ...defaultGridLabels, ...labels };
+  const seen = new Map<string, number>();
 
   return (
     <ul
@@ -170,6 +171,8 @@ const BaseGrid = /* @__PURE__ */ forwardRef<GridHandle, BaseGridProps>(function 
       data-virtual={virtual || undefined}
     >
       {slides.map((slide, i) => {
+        const copy = seen.get(slide.src) ?? 0;
+        seen.set(slide.src, copy + 1);
         const item = items[i];
         if (!item) return null;
         const away = item.top !== undefined && (item.top > to || item.top + item.height < from);
@@ -210,7 +213,11 @@ const BaseGrid = /* @__PURE__ */ forwardRef<GridHandle, BaseGridProps>(function 
             />
           );
         return (
-          <li key={i} className={cx("eg-grid-item", classNames.item)} style={item.style}>
+          <li
+            key={copy ? `${slide.src}#${copy}` : slide.src}
+            className={cx("eg-grid-item", classNames.item)}
+            style={item.style}
+          >
             {onOpen ? (
               <button
                 ref={(el) => {
